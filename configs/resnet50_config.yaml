@@ -3,18 +3,20 @@
 
 # Dataset Configuration
 data:
-  data_source: "huggingface"  # Options: "huggingface" or "folder"
-  dataset_name: "SunnyAgarwal4274/Food_Ingredients"  # HuggingFace dataset name
-  train_split: "train"  # Training split name
-  val_split: "validation"  # Validation split name
-  data_dir: "./data"  # Only used if data_source is "folder"
+  data_source: "folder"  # Options: "huggingface" or "folder"
+  dataset_name: ""  # HuggingFace dataset name
+  train_split: ""  # Training split name (ignored if use_custom_split=true)
+  val_split: ""  # Validation split name (ignored if use_custom_split=true)
+  use_custom_split: false  # If true, ignore predefined splits and create 80/20 train/val split in streaming mode
+  train_ratio: 0.8  # Ratio for training split when use_custom_split=true (default: 0.8 = 80%)
+  data_dir: "C:\\Users\\DaudDewan\\OneDrive - SymphonyAI\\Documents\\Learning\\roehampton\\ai_coursework\\merged_dataset"  # Only used if data_source is "folder"
   image_size: 224
   num_workers: 4
 
 # Model Configuration
 model:
   architecture: "resnet50"  # Options: resnet50, se_resnet50
-  num_classes: 357  # Will be auto-detected from dataset if not specified
+  num_classes: 90  # Will be auto-detected from dataset if not specified
   pretrained: true
   se_reduction: 16  # Only used for SE-ResNet-50
 
@@ -48,10 +50,10 @@ checkpoint:
 
 # Weights & Biases Configuration
 wandb:
-  use: false  # Set to true to enable wandb logging
+  use: true  # Set to true to enable wandb logging
   project: "ingredient-recognition"
   entity: null  # Your wandb team/username, or null
-  run_name: null  # Custom run name, or null for auto-generated
+  run_name: "exp1_90_classes"  # Custom run name, or null for auto-generated
   tags: []  # List of tags, e.g., ["resnet50", "baseline"]
   api_key: ""
 

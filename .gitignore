@@ -46,6 +46,7 @@ results/
 
 # Data
 data/
+merged_dataset/
 *.csv
 *.h5
 *.hdf5

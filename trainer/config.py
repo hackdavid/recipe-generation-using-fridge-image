@@ -36,6 +36,8 @@ def load_config(config_path):
     cfg['dataset_name'] = data_cfg.get('dataset_name', None)  # HuggingFace dataset name
     cfg['train_split'] = data_cfg.get('train_split', 'train')
     cfg['val_split'] = data_cfg.get('val_split', 'validation')
+    cfg['use_custom_split'] = data_cfg.get('use_custom_split', False)  # Create 80/20 split in streaming mode
+    cfg['train_ratio'] = data_cfg.get('train_ratio', 0.8)  # Ratio for train split (default: 0.8 = 80%)
     cfg['data_dir'] = data_cfg.get('data_dir', './data')  # For folder-based datasets
     cfg['image_size'] = data_cfg.get('image_size', 224)
     cfg['num_workers'] = data_cfg.get('num_workers', 4)

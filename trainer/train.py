@@ -14,7 +14,17 @@ import sys
 import os
 from tqdm import tqdm
 import json
+import logging
 from datetime import datetime
+
+# Add project root to Python path to allow imports from any directory
+# Get the directory containing this file (trainer/)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Get the project root (parent of trainer/)
+project_root = os.path.dirname(script_dir)
+# Add project root to sys.path if not already there
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # Optional wandb import
 try:
@@ -22,6 +32,7 @@ try:
     WANDB_AVAILABLE = True
 except ImportError:
     WANDB_AVAILABLE = False
+    # Print warning before logger is set up
     print("Warning: wandb not installed. Install with: pip install wandb")
 
 from models import create_resnet50, create_se_resnet50
@@ -81,6 +92,46 @@ def train_epoch(model, train_loader, criterion, optimizer, device, epoch, use_wa
 
 
 
+def setup_logger(cfg):
+    """Setup logger with file and console handlers"""
+    # Create logs directory if it doesn't exist
+    logs_dir = os.path.join(project_root, 'logs')
+    os.makedirs(logs_dir, exist_ok=True)
+    
+    # Create timestamped log filename (human-readable format)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    model_name = cfg.get('model', 'model')
+    log_filename = f"{model_name}_{timestamp}.log"
+    log_filepath = os.path.join(logs_dir, log_filename)
+    
+    # Configure root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    
+    # Remove existing handlers to avoid duplicates
+    logger.handlers = []
+    
+    # File handler - writes to timestamped log file
+    file_handler = logging.FileHandler(log_filepath, mode='w', encoding='utf-8')
+    file_handler.setLevel(logging.INFO)
+    file_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
+    
+    # Console handler - writes to stdout
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter('%(message)s')
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+    
+    logger.info(f"Logging to file: {log_filepath}")
+    return logger, log_filepath
+
+
 def main():
     # Get config file path from command line
     if len(sys.argv) < 2:
@@ -91,28 +142,33 @@ def main():
     
     config_path = sys.argv[1]
     
-    # Load configuration
-    print(f"Loading configuration from: {config_path}")
+    # Load configuration first (needed for logger setup)
     cfg = load_config(config_path)
     
-    # Print configuration summary
-    print("\n" + "="*50)
-    print("Configuration Summary")
-    print("="*50)
-    print(f"Config file: {config_path}")
-    print(f"Model: {cfg['model']}")
-    print(f"Data directory: {cfg['data_dir']}")
-    print(f"Epochs: {cfg['epochs']}")
-    print(f"Batch size: {cfg['batch_size']}")
-    print(f"Learning rate: {cfg['lr']}")
-    print(f"Optimizer: {cfg['optimizer']}")
-    print(f"Scheduler: {cfg['scheduler'].get('type', 'StepLR')}")
-    print(f"Wandb: {'Enabled' if cfg['use_wandb'] else 'Disabled'}")
-    print("="*50)
+    # Setup logger with timestamped log file
+    logger, log_filepath = setup_logger(cfg)
+    
+    logger.info(f"Loading configuration from: {config_path}")
+    
+    # Log configuration summary
+    logger.info("\n" + "="*50)
+    logger.info("Configuration Summary")
+    logger.info("="*50)
+    logger.info(f"Config file: {config_path}")
+    logger.info(f"Model: {cfg['model']}")
+    logger.info(f"Data directory: {cfg.get('data_dir', 'N/A')}")
+    logger.info(f"Dataset name: {cfg.get('dataset_name', 'N/A')}")
+    logger.info(f"Epochs: {cfg['epochs']}")
+    logger.info(f"Batch size: {cfg['batch_size']}")
+    logger.info(f"Learning rate: {cfg['lr']}")
+    logger.info(f"Optimizer: {cfg['optimizer']}")
+    logger.info(f"Scheduler: {cfg['scheduler'].get('type', 'StepLR')}")
+    logger.info(f"Wandb: {'Enabled' if cfg['use_wandb'] else 'Disabled'}")
+    logger.info("="*50)
     
     # Device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
+    logger.info(f"Using device: {device}")
     
     # Initialize wandb
     use_wandb = cfg.get('use_wandb', False) and WANDB_AVAILABLE
@@ -121,13 +177,13 @@ def main():
         wandb_api_key = cfg.get('wandb_api_key')
         if wandb_api_key:
             os.environ['WANDB_API_KEY'] = wandb_api_key
-            print("✓ Wandb API key set from config")
+            logger.info("✓ Wandb API key set from config")
         elif not os.environ.get('WANDB_API_KEY'):
-            print("Warning: No wandb API key found in config or environment. Wandb login may be required.")
+            logger.warning("No wandb API key found in config or environment. Wandb login may be required.")
         # Generate run name if not provided
         run_name = cfg.get('wandb_run_name')
         if run_name is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             run_name = f"{cfg['model']}_{timestamp}"
         
         wandb.init(
@@ -147,41 +203,41 @@ def main():
                 'device': str(device),
             }
         )
-        print(f"✓ Wandb initialized: {wandb.run.url}")
+        logger.info(f"✓ Wandb initialized: {wandb.run.url}")
     elif cfg.get('use_wandb', False) and not WANDB_AVAILABLE:
-        print("Warning: wandb enabled in config but wandb not installed. Continuing without wandb.")
+        logger.warning("wandb enabled in config but wandb not installed. Continuing without wandb.")
     
     # Create save directory
     os.makedirs(cfg['save_dir'], exist_ok=True)
     
     # Load data
-    print("\nLoading datasets...")
-    if cfg['data_source'] == 'huggingface':
-        print(f"Using HuggingFace dataset: {cfg['dataset_name']}")
-        train_loader, val_loader, num_classes, class_names = get_hf_data_loaders(
-            dataset_name=cfg['dataset_name'],
-            num_classes=cfg['num_classes'],
-            train_split=cfg['train_split'],
-            val_split=cfg['val_split'],
-            batch_size=cfg['batch_size'],
-            num_workers=cfg['num_workers'],
-            image_size=cfg['image_size']
-        )
-        # Override num_classes from config (since we're using config value)
-        num_classes = cfg['num_classes']
-    else:
-        raise ValueError(f"Unsupported data_source: {cfg['data_source']}. Only 'huggingface' is supported.")
+    logger.info("\nLoading datasets...")
+    train_loader, val_loader, num_classes, class_names = get_hf_data_loaders(
+        data_source=cfg['data_source'],
+        data_dir=cfg.get('data_dir') if cfg['data_source'] == 'folder' else cfg.get('dataset_name'),
+        num_classes=cfg['num_classes'],
+        train_split=cfg.get('train_split'),
+        val_split=cfg.get('val_split'),
+        batch_size=cfg['batch_size'],
+        num_workers=cfg['num_workers'],
+        image_size=cfg['image_size'],
+        shuffle_train=True,
+        seed=42,
+        train_ratio=cfg.get('train_ratio', 0.8)
+    )
+    # Ensure num_classes is from config
+    num_classes = cfg['num_classes']
     
-    print(f"Number of classes: {num_classes}")
-    # Note: IterableDataset doesn't have len(), so we can't print sample counts
+    logger.info(f"Number of classes: {num_classes}")
+    # Note: IterableDataset doesn't have len(), so we can't log sample counts
     if hasattr(train_loader.dataset, '__len__') and train_loader.dataset.__len__() is not None:
-        print(f"Training samples: {len(train_loader.dataset)}")
-        print(f"Validation samples: {len(val_loader.dataset)}")
+        logger.info(f"Training samples: {len(train_loader.dataset)}")
+        logger.info(f"Validation samples: {len(val_loader.dataset)}")
     else:
-        print("Training/validation samples: Streaming dataset (size unknown)")
+        logger.info("Training/validation samples: Streaming dataset (size unknown)")
     
     # Create model
-    print(f"\nCreating {cfg['model']} model...")
+    logger.info(f"\nCreating {cfg['model']} model...")
     if cfg['model'] == 'resnet50':
         model = create_resnet50(num_classes=num_classes, pretrained=cfg.get('pretrained', True))
     else:
@@ -193,8 +249,8 @@ def main():
     # Count parameters
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Total parameters: {total_params:,}")
-    print(f"Trainable parameters: {trainable_params:,}")
+    logger.info(f"Total parameters: {total_params:,}")
+    logger.info(f"Trainable parameters: {trainable_params:,}")
     
     # Log model info to wandb
     if use_wandb:
@@ -255,7 +311,7 @@ def main():
     history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
     
     if cfg.get('resume'):
-        print(f"\nResuming from checkpoint: {cfg['resume']}")
+        logger.info(f"\nResuming from checkpoint: {cfg['resume']}")
         checkpoint = torch.load(cfg['resume'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -264,9 +320,9 @@ def main():
         history = checkpoint['history']
     
     # Training loop
-    print("\n" + "="*50)
-    print("Starting Training")
-    print("="*50)
+    logger.info("\n" + "="*50)
+    logger.info("Starting Training")
+    logger.info("="*50)
     
     for epoch in range(start_epoch, cfg['epochs']):
         # Train
@@ -302,11 +358,11 @@ def main():
                 'learning_rate': current_lr,
             })
         
-        # Print epoch summary
-        print(f"\nEpoch {epoch+1}/{cfg['epochs']}")
-        print(f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%")
-        print(f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
-        print(f"Learning Rate: {current_lr:.6f}")
+        # Log epoch summary
+        logger.info(f"\nEpoch {epoch+1}/{cfg['epochs']}")
+        logger.info(f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%")
+        logger.info(f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
+        logger.info(f"Learning Rate: {current_lr:.6f}")
         
         # Save checkpoint
         checkpoint = {
@@ -326,7 +382,7 @@ def main():
             checkpoint['best_val_acc'] = best_val_acc
             best_model_path = os.path.join(cfg['save_dir'], f"{cfg['model']}_best.pth")
             torch.save(checkpoint, best_model_path)
-            print(f"✓ Saved best model (Val Acc: {val_acc:.2f}%)")
+            logger.info(f"✓ Saved best model (Val Acc: {val_acc:.2f}%)")
             
             # Log best model to wandb
             if use_wandb:
@@ -343,9 +399,9 @@ def main():
             wandb.save(latest_model_path)
     
     # Final evaluation with detailed metrics
-    print("\n" + "="*50)
-    print("Final Evaluation")
-    print("="*50)
+    logger.info("\n" + "="*50)
+    logger.info("Final Evaluation")
+    logger.info("="*50)
     
     final_val_loss, final_val_acc, final_preds, final_labels = validate(
         model, val_loader, criterion, device
@@ -353,11 +409,11 @@ def main():
     
     metrics = calculate_metrics(final_preds, final_labels, num_classes)
     
-    print(f"\nFinal Validation Results:")
-    print(f"Accuracy: {final_val_acc:.2f}%")
-    print(f"Precision: {metrics['precision']:.4f}")
-    print(f"Recall: {metrics['recall']:.4f}")
-    print(f"F1-Score: {metrics['f1']:.4f}")
+    logger.info(f"\nFinal Validation Results:")
+    logger.info(f"Accuracy: {final_val_acc:.2f}%")
+    logger.info(f"Precision: {metrics['precision']:.4f}")
+    logger.info(f"Recall: {metrics['recall']:.4f}")
+    logger.info(f"F1-Score: {metrics['f1']:.4f}")
     
     # Log final metrics to wandb
     if use_wandb:
@@ -396,7 +452,7 @@ def main():
             wandb.log({'confusion_matrix': wandb.Image(plt)})
             plt.close()
         except Exception as e:
-            print(f"Warning: Could not log confusion matrix to wandb: {e}")
+            logger.warning(f"Could not log confusion matrix to wandb: {e}")
     
     # Save final metrics
     results = {
@@ -420,12 +476,44 @@ def main():
         wandb.save(results_path)
         wandb.finish()
     
-    print(f"\n✓ Training complete!")
-    print(f"✓ Results saved to {cfg['save_dir']}")
+    logger.info(f"\n✓ Training complete!")
+    logger.info(f"✓ Results saved to {cfg['save_dir']}")
+    logger.info(f"✓ Log file saved to: {log_filepath}")
     if use_wandb:
-        print(f"✓ Wandb run: {wandb.run.url}")
+        logger.info(f"✓ Wandb run: {wandb.run.url}")
 
 
 if __name__ == '__main__':
+    """
+    How to run this training script:
+    
+    From the project root directory:
+    
+    1. Using local folder dataset:
+       python trainer/train.py configs/resnet50_config.yaml
+       
+    2. Using HuggingFace dataset:
+       python trainer/train.py configs/resnet50_config.yaml
+       
+    3. Using experiment configs:
+       python trainer/train.py experiments/exp1.yaml
+       python trainer/train.py experiments/exp2.yaml
+    
+    Examples:
+        # Train ResNet-50 with local folder
+        python trainer/train.py configs/resnet50_config.yaml
+        
+        # Train SE-ResNet-50 with HuggingFace dataset
+        python trainer/train.py configs/se_resnet50_config.yaml
+        
+        # Run experiment with custom config
+        python trainer/train.py experiments/exp1.yaml
+    
+    Note: Make sure your YAML config file specifies:
+    - data_source: 'folder' or 'huggingface'
+    - data_dir: Local path (for folder) or HuggingFace dataset name
+    - num_classes: Number of classes (required)
+    - All other training parameters
+    """
     main()
 

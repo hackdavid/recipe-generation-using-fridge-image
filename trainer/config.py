@@ -41,6 +41,12 @@ def load_config(config_path):
     cfg['data_dir'] = data_cfg.get('data_dir', './data')  # For folder-based datasets
     cfg['image_size'] = data_cfg.get('image_size', 224)
     cfg['num_workers'] = data_cfg.get('num_workers', 4)
+    cfg['class_mapping_path'] = data_cfg.get('class_mapping_path', 'trainer/class_mapping.json')  # Path to class mapping JSON
+    
+    # Debug mode configuration
+    cfg['debug_mode'] = data_cfg.get('debug_mode', False)  # Enable debug mode for quick testing
+    cfg['debug_max_train_batches'] = data_cfg.get('debug_max_train_batches', 1)  # Max training batches in debug mode
+    cfg['debug_max_val_batches'] = data_cfg.get('debug_max_val_batches', 1)  # Max validation batches in debug mode
     
     # Model configuration
     model_cfg = config.get('model', {})

@@ -16,6 +16,7 @@ from tqdm import tqdm
 import json
 import logging
 from datetime import datetime
+from itertools import islice
 
 # Add project root to Python path to allow imports from any directory
 # Get the directory containing this file (trainer/)
@@ -42,14 +43,22 @@ from trainer.validation import validate
 from trainer.hf_dataset import get_hf_data_loaders
 
 
-def train_epoch(model, train_loader, criterion, optimizer, device, epoch, use_wandb=False):
+def train_epoch(model, train_loader, criterion, optimizer, device, epoch, use_wandb=False, max_batches=None):
     """Train for one epoch"""
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
     
-    pbar = tqdm(train_loader, desc=f'Epoch {epoch} [Train]')
+    # Limit batches in debug mode
+    loader_iter = iter(train_loader)
+    if max_batches is not None:
+        loader_iter = islice(loader_iter, max_batches)
+        total_batches = max_batches
+    else:
+        total_batches = len(train_loader) if hasattr(train_loader, '__len__') else None
+    
+    pbar = tqdm(loader_iter, desc=f'Epoch {epoch} [Train]', total=total_batches)
     for batch_idx, (images, labels) in enumerate(pbar):
         images = images.to(device)
         labels = labels.to(device)
@@ -84,8 +93,10 @@ def train_epoch(model, train_loader, criterion, optimizer, device, epoch, use_wa
             'acc': f'{100 * correct / total:.2f}%'
         })
     
-    epoch_loss = running_loss / len(train_loader)
-    epoch_acc = 100 * correct / total
+    # Calculate average loss and accuracy
+    num_batches = batch_idx + 1
+    epoch_loss = running_loss / num_batches
+    epoch_acc = 100 * correct / total if total > 0 else 0.0
     
     return epoch_loss, epoch_acc
 
@@ -210,8 +221,29 @@ def main():
     # Create save directory
     os.makedirs(cfg['save_dir'], exist_ok=True)
     
+    # Debug mode settings - check early and adjust num_workers
+    debug_mode = cfg.get('debug_mode', False)
+    if debug_mode:
+        logger.info("\n" + "="*50)
+        logger.info("DEBUG MODE ENABLED")
+        logger.info("="*50)
+        logger.info("Setting num_workers=0 for debug mode (avoids multiprocessing issues)")
+        logger.info("="*50 + "\n")
+        # Override num_workers in debug mode BEFORE creating data loaders
+        cfg['num_workers'] = 0
+    
     # Load data
     logger.info("\nLoading datasets...")
+    
+    # Get class mapping path (default: trainer/class_mapping.json)
+    class_mapping_path = cfg.get('class_mapping_path', 'trainer/class_mapping.json')
+    if class_mapping_path and os.path.exists(class_mapping_path):
+        logger.info(f"Using class mapping from: {class_mapping_path}")
+    elif class_mapping_path:
+        logger.warning(f"Class mapping file not found: {class_mapping_path}")
+        logger.warning("Training will proceed without mapping (may fail if labels are strings)")
+        class_mapping_path = None
+    
     train_loader, val_loader, num_classes, class_names = get_hf_data_loaders(
         data_source=cfg['data_source'],
         data_dir=cfg.get('data_dir') if cfg['data_source'] == 'folder' else cfg.get('dataset_name'),
@@ -223,7 +255,8 @@ def main():
         image_size=cfg['image_size'],
         shuffle_train=True,
         seed=42,
-        train_ratio=cfg.get('train_ratio', 0.8)
+        train_ratio=cfg.get('train_ratio', 0.8),
+        class_mapping_path=class_mapping_path
     )
     # Ensure num_classes is from config
     num_classes = cfg['num_classes']
@@ -315,23 +348,65 @@ def main():
         checkpoint = torch.load(cfg['resume'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        start_epoch = checkpoint['epoch']
+        checkpoint_epoch = checkpoint['epoch']
         best_val_acc = checkpoint['best_val_acc']
         history = checkpoint['history']
+        
+        # When resuming, start from the checkpoint epoch (which is the next epoch to train)
+        # Note: checkpoint['epoch'] is the epoch number that was completed (e.g., epoch 1 means epoch 0 was done)
+        # So we start training from checkpoint_epoch (which is the next epoch)
+        start_epoch = checkpoint_epoch
+        
+        logger.info(f"Checkpoint was saved at epoch {checkpoint_epoch} (completed {checkpoint_epoch} epochs)")
+        logger.info(f"Resuming training from epoch {start_epoch} to {cfg['epochs']}")
+        
+        # If checkpoint epoch >= total epochs, extend epochs to allow continuing training
+        # This ensures that when resuming, we can always train at least one more epoch
+        if start_epoch >= cfg['epochs']:
+            logger.info(f"Checkpoint epoch ({start_epoch}) >= total epochs ({cfg['epochs']})")
+            logger.info("Extending epochs to allow continuing training from checkpoint")
+            # Extend epochs to allow at least one more epoch
+            cfg['epochs'] = start_epoch + 1
     
     # Training loop
     logger.info("\n" + "="*50)
     logger.info("Starting Training")
     logger.info("="*50)
     
+    # Debug mode batch limits (num_workers already set above)
+    debug_max_train_batches = cfg.get('debug_max_train_batches', 1)
+    debug_max_val_batches = cfg.get('debug_max_val_batches', 1)
+    
+    if debug_mode:
+        logger.info(f"Debug batch limits: train={debug_max_train_batches}, val={debug_max_val_batches}")
+    
+    # Log training range
+    if start_epoch < cfg['epochs']:
+        epochs_to_train = cfg['epochs'] - start_epoch
+        logger.info(f"Training epochs: {start_epoch} to {cfg['epochs']-1} (total: {epochs_to_train} epoch(s))")
+        if debug_mode:
+            logger.info(f"Each epoch will process: {debug_max_train_batches} train batch(es) + {debug_max_val_batches} val batch(es)")
+    else:
+        logger.warning(f"start_epoch ({start_epoch}) >= total epochs ({cfg['epochs']}). No training will occur.")
+    
     for epoch in range(start_epoch, cfg['epochs']):
         # Train
-        train_loss, train_acc = train_epoch(model, train_loader, criterion, 
-                                           optimizer, device, epoch, use_wandb=use_wandb)
+        max_train_batches = debug_max_train_batches if debug_mode else None
+        train_loss, train_acc = train_epoch(
+            model, train_loader, criterion, 
+            optimizer, device, epoch, 
+            use_wandb=use_wandb,
+            max_batches=max_train_batches
+        )
         
         # Validate
-        val_loss, val_acc, val_preds, val_labels = validate(model, val_loader, 
-                                                           criterion, device, use_wandb=use_wandb)
+        max_val_batches = debug_max_val_batches if debug_mode else None
+        val_loss, val_acc, val_preds, val_labels = validate(
+            model, val_loader, 
+            criterion, device, 
+            use_wandb=use_wandb,
+            max_batches=max_val_batches
+        )
         
         # Update learning rate
         if scheduler_type == 'reducelronplateau':
@@ -403,8 +478,10 @@ def main():
     logger.info("Final Evaluation")
     logger.info("="*50)
     
+    # Final evaluation (also respect debug mode)
+    max_final_val_batches = debug_max_val_batches if debug_mode else None
     final_val_loss, final_val_acc, final_preds, final_labels = validate(
-        model, val_loader, criterion, device
+        model, val_loader, criterion, device, max_batches=max_final_val_batches
     )
     
     metrics = calculate_metrics(final_preds, final_labels, num_classes)
@@ -432,7 +509,7 @@ def main():
             
             cm = np.array(metrics['confusion_matrix'])
             # Plot top 20 classes for readability
-            if len(class_names) > 20:
+            if class_names and len(class_names) > 20:
                 class_counts = cm.sum(axis=1)
                 top_indices = np.argsort(class_counts)[-20:]
                 cm_plot = cm[np.ix_(top_indices, top_indices)]
@@ -472,15 +549,19 @@ def main():
         json.dump(results, f, indent=2)
     
     # Log results file to wandb
+    wandb_url = None
     if use_wandb:
         wandb.save(results_path)
+        # Store URL before finishing
+        if wandb.run is not None:
+            wandb_url = wandb.run.url
         wandb.finish()
     
     logger.info(f"\n✓ Training complete!")
     logger.info(f"✓ Results saved to {cfg['save_dir']}")
     logger.info(f"✓ Log file saved to: {log_filepath}")
-    if use_wandb:
-        logger.info(f"✓ Wandb run: {wandb.run.url}")
+    if use_wandb and wandb_url:
+        logger.info(f"✓ Wandb run: {wandb_url}")
 
 
 if __name__ == '__main__':

@@ -24,8 +24,9 @@ from torchvision.datasets import ImageFolder
 from datasets import load_dataset
 import torchvision.transforms as transforms
 from PIL import Image
-from typing import Optional, Callable, Tuple, List
+from typing import Optional, Callable, Tuple, List, Dict
 import hashlib
+import json
 
 
 class HuggingFaceStreamDataset(torch.utils.data.IterableDataset):
@@ -69,7 +70,8 @@ class HuggingFaceStreamDataset(torch.utils.data.IterableDataset):
         seed: int = 42,
         use_custom_split: bool = False,
         train_ratio: float = 0.8,
-        split_type: str = 'train'
+        split_type: str = 'train',
+        label_to_id: Optional[Dict[str, int]] = None
     ):
         self.dataset_name = dataset_name
         self.split = split
@@ -83,6 +85,7 @@ class HuggingFaceStreamDataset(torch.utils.data.IterableDataset):
         self.use_custom_split = use_custom_split
         self.train_ratio = train_ratio
         self.split_type = split_type  # 'train' or 'val' when use_custom_split=True
+        self.label_to_id = label_to_id  # Mapping from string labels to integer IDs
         
         # Load dataset
         if use_custom_split or split is None:
@@ -148,11 +151,40 @@ class HuggingFaceStreamDataset(torch.utils.data.IterableDataset):
                 image = self.transform(image)
             
             # Extract and process label
-            label = sample[self.label_key]
+            # First check if 'label_id' exists (preferred)
+            if 'label_id' in sample:
+                label = sample['label_id']
+            else:
+                label = sample[self.label_key]
             
-            # Ensure label is integer
-            if not isinstance(label, (int, torch.Tensor)):
-                label = int(label)
+            # Convert label to integer
+            if isinstance(label, torch.Tensor):
+                label = label.item()
+            elif isinstance(label, str):
+                # String label - use mapping
+                if self.label_to_id:
+                    if label in self.label_to_id:
+                        label = self.label_to_id[label]
+                    else:
+                        # Label not in mapping - skip this sample
+                        print(f"Warning: Label '{label}' not found in mapping. Skipping sample.")
+                        continue
+                else:
+                    # No mapping available - try to convert directly (will fail if string)
+                    try:
+                        label = int(label)
+                    except (ValueError, TypeError):
+                        raise ValueError(
+                            f"Label '{label}' is a string but no label mapping is available. "
+                            f"Please generate class mapping JSON first using: "
+                            f"python trainer/generate_class_mapping.py --dataset_name {self.dataset_name}"
+                        )
+            elif not isinstance(label, int):
+                # Try to convert to int
+                try:
+                    label = int(label)
+                except (ValueError, TypeError):
+                    raise ValueError(f"Cannot convert label '{label}' (type: {type(label)}) to integer")
             
             yield image, label
     
@@ -168,6 +200,35 @@ class HuggingFaceStreamDataset(torch.utils.data.IterableDataset):
         return None
 
 
+def load_class_mapping(mapping_path: str) -> Dict:
+    """
+    Load class mapping from JSON file.
+    
+    Args:
+        mapping_path: Path to the JSON file containing class mapping
+        
+    Returns:
+        Dictionary containing:
+            - 'label_to_id': Dict mapping class names to IDs
+            - 'id_to_label': Dict mapping IDs to class names
+            - 'class_names': List of class names in order
+            - 'num_classes': Number of classes
+    """
+    if not os.path.exists(mapping_path):
+        raise FileNotFoundError(
+            f"Class mapping file not found: {mapping_path}\n"
+            f"Please generate it first using: python trainer/generate_class_mapping.py"
+        )
+    
+    with open(mapping_path, 'r', encoding='utf-8') as f:
+        mapping_data = json.load(f)
+    
+    print(f"✓ Class mapping loaded from: {mapping_path}")
+    print(f"  Number of classes: {mapping_data.get('num_classes', len(mapping_data.get('class_names', [])))}")
+    
+    return mapping_data
+
+
 def get_data_loaders(
     data_source: str,
     data_dir: str,
@@ -180,7 +241,8 @@ def get_data_loaders(
     shuffle_train: bool = True,
     shuffle_buffer_size: int = 10000,
     seed: int = 42,
-    train_ratio: float = 0.8
+    train_ratio: float = 0.8,
+    class_mapping_path: Optional[str] = None
 ) -> Tuple[DataLoader, DataLoader, int, Optional[List[str]]]:
     """
     Unified function to create data loaders from different sources.
@@ -293,6 +355,15 @@ def get_data_loaders(
         
         print(f"Loading HuggingFace dataset: {dataset_name}")
         
+        # Load class mapping if provided
+        label_to_id = None
+        class_names = None
+        if class_mapping_path:
+            mapping_data = load_class_mapping(class_mapping_path)
+            label_to_id = mapping_data.get('label_to_id', {})
+            class_names = mapping_data.get('class_names', [])
+            print(f"Using class mapping with {len(class_names)} classes")
+        
         # Check if dataset has predefined splits
         try:
             dataset_dict = load_dataset(dataset_name, streaming=False)
@@ -323,7 +394,8 @@ def get_data_loaders(
                     shuffle=shuffle_train,
                     shuffle_buffer_size=shuffle_buffer_size,
                     seed=seed,
-                    use_custom_split=False
+                    use_custom_split=False,
+                    label_to_id=label_to_id
                 )
                 
                 val_dataset = HuggingFaceStreamDataset(
@@ -333,7 +405,8 @@ def get_data_loaders(
                     transform=val_transform,
                     shuffle=False,
                     seed=seed,
-                    use_custom_split=False
+                    use_custom_split=False,
+                    label_to_id=label_to_id
                 )
             else:
                 # No predefined splits, create 80/20 split
@@ -349,7 +422,8 @@ def get_data_loaders(
                     seed=seed,
                     use_custom_split=True,
                     train_ratio=train_ratio,
-                    split_type='train'
+                    split_type='train',
+                    label_to_id=label_to_id
                 )
                 
                 val_dataset = HuggingFaceStreamDataset(
@@ -361,7 +435,8 @@ def get_data_loaders(
                     seed=seed,
                     use_custom_split=True,
                     train_ratio=train_ratio,
-                    split_type='val'
+                    split_type='val',
+                    label_to_id=label_to_id
                 )
         except Exception as e:
             # Fallback: assume no splits and create custom split
@@ -377,7 +452,8 @@ def get_data_loaders(
                 seed=seed,
                 use_custom_split=True,
                 train_ratio=train_ratio,
-                split_type='train'
+                split_type='train',
+                label_to_id=label_to_id
             )
             
             val_dataset = HuggingFaceStreamDataset(
@@ -389,16 +465,40 @@ def get_data_loaders(
                 seed=seed,
                 use_custom_split=True,
                 train_ratio=train_ratio,
-                split_type='val'
+                split_type='val',
+                label_to_id=label_to_id
             )
         
         # Create data loaders
         # Note: For IterableDataset, we can't use shuffle=True in DataLoader
+        # For streaming datasets, limit num_workers to avoid issues with dataset shards
+        # On Windows or with streaming datasets, num_workers > 0 can cause issues
+        effective_num_workers = num_workers
+        
+        # Try to detect dataset shards and limit workers accordingly
+        try:
+            if hasattr(train_dataset, 'dataset_stream'):
+                # Check if dataset has num_shards attribute
+                if hasattr(train_dataset.dataset_stream, 'info') and hasattr(train_dataset.dataset_stream.info, 'num_shards'):
+                    max_shards = train_dataset.dataset_stream.info.num_shards
+                    if max_shards and num_workers > max_shards:
+                        print(f"Warning: Limiting num_workers from {num_workers} to {max_shards} (dataset has {max_shards} shards)")
+                        effective_num_workers = min(num_workers, max_shards)
+        except:
+            pass
+        
+        # On Windows, multiprocessing can be problematic - use 0 workers if issues occur
+        import sys
+        if sys.platform == 'win32' and num_workers > 0:
+            # For Windows, prefer 0 workers for streaming datasets to avoid multiprocessing issues
+            if effective_num_workers > 0:
+                print(f"Note: Using num_workers={effective_num_workers} on Windows. Set to 0 if you encounter worker errors.")
+        
         train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
             shuffle=False,  # Shuffling handled by dataset
-            num_workers=num_workers,
+            num_workers=effective_num_workers,
             pin_memory=True if torch.cuda.is_available() else False
         )
         
@@ -406,11 +506,11 @@ def get_data_loaders(
             val_dataset,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=num_workers,
+            num_workers=effective_num_workers,
             pin_memory=True if torch.cuda.is_available() else False
         )
         
-        return train_loader, val_loader, num_classes, None
+        return train_loader, val_loader, num_classes, class_names
     
     else:
         raise ValueError(f"Invalid data_source: {data_source}. Must be 'folder' or 'huggingface'")

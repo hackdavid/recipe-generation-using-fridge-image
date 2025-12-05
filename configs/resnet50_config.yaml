@@ -3,28 +3,31 @@
 
 # Dataset Configuration
 data:
-  data_source: "folder"  # Options: "huggingface" or "folder"
-  dataset_name: ""  # HuggingFace dataset name
-  train_split: ""  # Training split name (ignored if use_custom_split=true)
-  val_split: ""  # Validation split name (ignored if use_custom_split=true)
+  data_source: "huggingface"  # Options: "huggingface" or "folder"
+  dataset_name: "ibrahimdaud/raw-food-recognition"  # HuggingFace dataset name
+  train_split: "train"  # Training split name (ignored if use_custom_split=true)
+  val_split: "validation"  # Validation split name (ignored if use_custom_split=true)
   use_custom_split: false  # If true, ignore predefined splits and create 80/20 train/val split in streaming mode
   train_ratio: 0.8  # Ratio for training split when use_custom_split=true (default: 0.8 = 80%)
-  data_dir: "C:\\Users\\DaudDewan\\OneDrive - SymphonyAI\\Documents\\Learning\\roehampton\\ai_coursework\\merged_dataset"  # Only used if data_source is "folder"
+  data_dir: ""  # Only used if data_source is "folder"
   image_size: 224
   num_workers: 4
+  class_mapping_path: "trainer/class_mapping.json"  # Path to class mapping JSON file (generate first using generate_class_mapping.py)
+  debug_mode: false  # Set to true for quick end-to-end testing (runs 1 batch train + 1 batch val)
+  debug_max_train_batches: 1  # Max training batches per epoch in debug mode
+  debug_max_val_batches: 1  # Max validation batches per epoch in debug mode
 
 # Model Configuration
 model:
   architecture: "resnet50"  # Options: resnet50, se_resnet50
   num_classes: 90  # Will be auto-detected from dataset if not specified
   pretrained: true
-  se_reduction: 16  # Only used for SE-ResNet-50
+  se_reduction: false  #16  # Only used for SE-ResNet-50
 
 # Training Configuration
 training:
   epochs: 50
   batch_size: 32
-  learning_rate: 0.001
   weight_decay: 0.0001
   
   # Learning rate scheduler
@@ -53,12 +56,12 @@ wandb:
   use: true  # Set to true to enable wandb logging
   project: "ingredient-recognition"
   entity: null  # Your wandb team/username, or null
-  run_name: "exp1_90_classes"  # Custom run name, or null for auto-generated
+  run_name: "exp_50_epochs_90_classes"  # Custom run name, or null for auto-generated
   tags: []  # List of tags, e.g., ["resnet50", "baseline"]
   api_key: ""
 
 # Logging Configuration
 logging:
   verbose: true
-  log_interval: 10  # Log every N batches (for wandb)
+  log_interval: 4  # Log every N batches (for wandb)
 

@@ -1,0 +1,139 @@
+{
+  "timestamp": "20251206_223659",
+  "device": "cpu",
+  "resnet50_results": {
+    "model_type": "resnet50",
+    "checkpoint_path": "resnet50_best.pth",
+    "timestamp": "2025-12-06T22:36:24.354892",
+    "device": "cpu",
+    "input_size": 224,
+    "num_classes": 90,
+    "model_characteristics": {
+      "parameters": {
+        "total": 23692442,
+        "trainable": 23692442,
+        "non_trainable": 0
+      },
+      "model_size": {
+        "bytes": 284770415,
+        "mb": 271.5782308578491,
+        "gb": 0.2652131160721183
+      }
+    },
+    "accuracy_metrics": {
+      "best_val_acc": 97.84086365453818,
+      "epoch": 47
+    },
+    "inference_speed": {
+      "batch_1": {
+        "latency_ms": {
+          "mean": 715.2068800013512,
+          "median": 710.5298500391655,
+          "min": 597.9979999829084,
+          "max": 894.0459999721497,
+          "std": 51.22645243674316,
+          "p50": 710.5298500391655,
+          "p95": 809.5150400418788,
+          "p99": 834.7210419119805
+        },
+        "throughput": {
+          "fps": 1.3981968406094063,
+          "samples_per_second": 1.398196840609406
+        },
+        "batch_size": 1,
+        "num_iterations": 100
+      }
+    },
+    "memory_usage": {
+      "cpu": {
+        "rss_mb": 630.03125
+      }
+    }
+  },
+  "se_resnet50_results": {
+    "model_type": "se_resnet50",
+    "checkpoint_path": "se_resnet50_best.pth",
+    "timestamp": "2025-12-06T22:36:59.948279",
+    "device": "cpu",
+    "input_size": 224,
+    "num_classes": 90,
+    "model_characteristics": {
+      "parameters": {
+        "total": 26207386,
+        "trainable": 26207386,
+        "non_trainable": 0
+      },
+      "model_size": {
+        "bytes": 314994794,
+        "mb": 300.40244483947754,
+        "gb": 0.2933617625385523
+      }
+    },
+    "accuracy_metrics": {
+      "best_val_acc": 95.72171131547381,
+      "epoch": 18
+    },
+    "inference_speed": {
+      "batch_1": {
+        "latency_ms": {
+          "mean": 321.22868099831976,
+          "median": 297.18225001124665,
+          "min": 166.97979997843504,
+          "max": 1131.1689000576735,
+          "std": 150.27659935997167,
+          "p50": 297.18225001124665,
+          "p95": 502.7989399677604,
+          "p99": 1049.2469940031883
+        },
+        "throughput": {
+          "fps": 3.1130470569819098,
+          "samples_per_second": 3.1130470569819098
+        },
+        "batch_size": 1,
+        "num_iterations": 100
+      }
+    },
+    "memory_usage": {
+      "cpu": {
+        "rss_mb": 794.66796875
+      }
+    }
+  },
+  "comparison": {
+    "parameter_comparison": {
+      "resnet50_total": 23692442,
+      "se_resnet50_total": 26207386,
+      "overhead": 2514944,
+      "overhead_percent": 10.61496320218912
+    },
+    "model_size_comparison": {
+      "resnet50_mb": 271.5782308578491,
+      "se_resnet50_mb": 300.40244483947754,
+      "size_increase_mb": 28.824213981628418,
+      "size_increase_percent": 10.613595165775912
+    },
+    "speed_comparison": {
+      "batch_1": {
+        "resnet50_latency_ms": 715.2068800013512,
+        "se_resnet50_latency_ms": 321.22868099831976,
+        "latency_increase_ms": -393.9781990030315,
+        "latency_increase_percent": -55.08590731150225,
+        "speedup_ratio": 2.22647267292142,
+        "resnet50_fps": 1.3981968406094063,
+        "se_resnet50_fps": 3.1130470569819098
+      }
+    },
+    "memory_comparison": {
+      "cpu": {
+        "resnet50_rss_mb": 630.03125,
+        "se_resnet50_rss_mb": 794.66796875,
+        "memory_increase_mb": 164.63671875
+      }
+    },
+    "accuracy_comparison": {
+      "resnet50_val_acc": 97.84086365453818,
+      "se_resnet50_val_acc": 95.72171131547381,
+      "accuracy_improvement": -2.119152339064371
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "model_type": "se_resnet50",
+  "checkpoint_path": "se_resnet50_best.pth",
+  "timestamp": "2025-12-06T22:36:59.948279",
+  "device": "cpu",
+  "input_size": 224,
+  "num_classes": 90,
+  "model_characteristics": {
+    "parameters": {
+      "total": 26207386,
+      "trainable": 26207386,
+      "non_trainable": 0
+    },
+    "model_size": {
+      "bytes": 314994794,
+      "mb": 300.40244483947754,
+      "gb": 0.2933617625385523
+    }
+  },
+  "accuracy_metrics": {
+    "best_val_acc": 95.72171131547381,
+    "epoch": 18
+  },
+  "inference_speed": {
+    "batch_1": {
+      "latency_ms": {
+        "mean": 321.22868099831976,
+        "median": 297.18225001124665,
+        "min": 166.97979997843504,
+        "max": 1131.1689000576735,
+        "std": 150.27659935997167,
+        "p50": 297.18225001124665,
+        "p95": 502.7989399677604,
+        "p99": 1049.2469940031883
+      },
+      "throughput": {
+        "fps": 3.1130470569819098,
+        "samples_per_second": 3.1130470569819098
+      },
+      "batch_size": 1,
+      "num_iterations": 100
+    }
+  },
+  "memory_usage": {
+    "cpu": {
+      "rss_mb": 794.66796875
+    }
+  }
+}

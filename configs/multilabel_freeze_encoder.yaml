@@ -1,0 +1,46 @@
+# Multi-Label Classification - Freeze Encoder Configuration
+# Only trains the classifier head, encoder (ResNet-50) is frozen
+
+experiment_name: multilabel_freeze_encoder
+training_mode: freeze  # freeze, full, finetune
+
+# Model configuration
+model:
+  pretrained: true  # Use ImageNet weights if checkpoint_path is not set
+  checkpoint_path: "./resnet50_best.pth"  # Path to your pre-trained ResNet-50 checkpoint (e.g., "checkpoints/resnet50_best.pth")
+  dropout: 0.5
+
+# Data configuration
+data:
+  dataset_name: "ibrahimdaud/multi-label-food-recognition"  # Update with your HuggingFace dataset
+  batch_size: 32
+  num_workers: 4
+  image_size: 224
+  split_ratio: 0.8  # Only used if dataset doesn't have predefined splits
+
+# Training configuration
+training:
+  epochs: 2
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  scheduler: step  # step, cosine, plateau
+  step_size: 10
+  gamma: 0.1
+
+# Checkpoint configuration
+checkpoint_dir: checkpoints/multilabel_freeze
+resume_checkpoint: "./checkpoints/multilabel_freeze/multilabel_best.pth"  # Path to checkpoint to resume from
+
+# Weights & Biases
+use_wandb: true
+wandb:
+  project: multilabel-food-recognition
+  run_name: multilabel_freeze_encoder_debug  # Custom run name for wandb
+
+# Debug mode
+debug_mode: true
+debug_max_samples: 10
+
+# Random seed
+seed: 42
+

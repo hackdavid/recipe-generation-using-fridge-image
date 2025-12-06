@@ -22,7 +22,7 @@ model:
   architecture: "se_resnet50"  # Options: resnet50, se_resnet50
   num_classes: 90  # Will be auto-detected from dataset if not specified
   pretrained: true
-  se_reduction: false  #16  # Only used for SE-ResNet-50
+  se_reduction: 16  # Reduction ratio for SE blocks (default: 16). Must be > 0.
 
 # Training Configuration
 training:

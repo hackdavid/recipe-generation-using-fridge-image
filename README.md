@@ -62,6 +62,12 @@ Both models are trained on food ingredient datasets using transfer learning from
 │   ├── evaluate.py             # Evaluation script
 │   └── generate_class_mapping.py  # Class mapping generator
 │
+├── utils/                       # Utility scripts
+│   ├── __init__.py
+│   ├── generate_multilabel_dataset.py  # Multi-label dataset generator
+│   ├── upload_model_to_hf.py   # Upload models to HuggingFace Hub
+│   └── benchmark_models.py     # Model benchmarking script
+│
 ├── configs/                     # Configuration files
 │   ├── resnet50_config.yaml    # ResNet-50 configuration
 │   └── se_resnet50_config.yaml # SE-ResNet-50 configuration
@@ -72,15 +78,11 @@ Both models are trained on food ingredient datasets using transfer learning from
 │   ├── exp2_debug.yaml         # Debug mode config
 │   └── se_resnet.yaml          # SE-ResNet experiment
 │
-├── docs/                        # Documentation
-│   ├── CLASS_MAPPING_GUIDE.md  # Class mapping guide
-│   ├── DATASET_GUIDE.md        # Dataset setup guide
-│   └── MEMORY_EFFICIENT_GUIDE.md  # Memory optimization guide
-│
 ├── checkpoints/                 # Model checkpoints (gitignored)
 ├── logs/                        # Training logs (gitignored)
 ├── requirements.txt            # Python dependencies
 ├── train_colab.ipynb           # Google Colab training notebook
+├── MULTI_LABEL_DATASET_GUIDE.md  # Multi-label dataset creation guide
 └── README.md                   # This file
 ```
 
@@ -124,16 +126,13 @@ pip install -r requirements.txt
 Before training, generate the class mapping JSON file:
 
 ```bash
-# For HuggingFace datasets
+# For the merged raw food recognition dataset
 python trainer/generate_class_mapping.py \
     --dataset_name "ibrahimdaud/raw-food-recognition" \
     --output trainer/class_mapping.json
-
-# For local folder datasets
-python trainer/generate_class_mapping.py \
-    --data_dir "./data" \
-    --output trainer/class_mapping.json
 ```
+
+**Note**: This project uses a custom merged dataset combining three publicly available datasets. See [DATASET_CREATION.md](DATASET_CREATION.md) for details on the dataset creation process.
 
 ## 🏃 Quick Start
 
@@ -188,6 +187,90 @@ python trainer/evaluate.py \
     --checkpoint ./checkpoints/resnet50_best.pth \
     --config configs/resnet50_config.yaml \
     --plot_cm
+```
+
+### Benchmarking Models
+
+Benchmark both models for comprehensive performance analysis:
+
+```bash
+python utils/benchmark_models.py \
+    --resnet_checkpoint ./checkpoints/resnet50_best.pth \
+    --se_resnet_checkpoint ./checkpoints/se_resnet50_best.pth \
+    --output_dir ./benchmark_results \
+    --num_iterations 100 \
+    --batch_sizes 1 4 8 16 32
+```
+
+This measures:
+- Inference speed (latency, throughput, FPS)
+- Memory usage (GPU/CPU)
+- Model size and parameters
+- Accuracy comparison
+- Performance trade-offs
+
+Results are saved in JSON format for easy integration into reports.
+
+### Benchmarking on Standard Datasets
+
+Compare your models against standard food classification benchmarks by evaluating on overlapping classes:
+
+**Food-101 Benchmark:**
+```bash
+python utils/benchmark_food101.py \
+    --resnet_checkpoint ./checkpoints/resnet50_best.pth \
+    --se_resnet_checkpoint ./checkpoints/se_resnet50_best.pth \
+    --class_mapping trainer/class_mapping.json \
+    --output_dir ./benchmark_results/food101
+```
+
+**FoodX-251 Benchmark:**
+```bash
+python utils/benchmark_foodx251.py \
+    --resnet_checkpoint ./checkpoints/resnet50_best.pth \
+    --se_resnet_checkpoint ./checkpoints/se_resnet50_best.pth \
+    --class_mapping trainer/class_mapping.json \
+    --dataset_path ./data/foodx251 \
+    --output_dir ./benchmark_results/foodx251
+```
+
+**UECFOOD-256 Benchmark:**
+```bash
+python utils/benchmark_uecfood256.py \
+    --resnet_checkpoint ./checkpoints/resnet50_best.pth \
+    --se_resnet_checkpoint ./checkpoints/se_resnet50_best.pth \
+    --class_mapping trainer/class_mapping.json \
+    --dataset_path ./data/uecfood256 \
+    --output_dir ./benchmark_results/uecfood256
+```
+
+Each script:
+- Automatically matches class names between datasets
+- Filters to only overlapping classes
+- Evaluates both ResNet-50 and SE-ResNet-50
+- Generates JSON results and Markdown reports
+- Shows class mapping and performance comparison
+
+**Note**: Food-101 is available on HuggingFace and will be downloaded automatically. FoodX-251 and UECFOOD-256 may need to be downloaded manually.
+
+### Upload Models to HuggingFace Hub
+
+Upload trained models for sharing and inference:
+
+**Upload both models to a single repository:**
+```bash
+python utils/upload_model_to_hf.py \
+    --resnet_checkpoint ./checkpoints/resnet50_best.pth \
+    --se_resnet_checkpoint ./checkpoints/se_resnet50_best.pth \
+    --repo_id "your-username/raw-food-recognition-models" \
+    --private
+```
+
+**Upload a single model:**
+```bash
+python utils/upload_model_to_hf.py \
+    --checkpoint ./checkpoints/resnet50_best.pth \
+    --repo_id "your-username/resnet50-raw-food-recognition"
 ```
 
 ### Google Colab
@@ -311,17 +394,9 @@ Training produces:
 
 ## 📚 Documentation
 
-Comprehensive documentation is available in the `docs/` directory:
-
-- **[Getting Started Guide](docs/GETTING_STARTED.md)**: Step-by-step setup instructions for new users
-- **[Project Structure](docs/PROJECT_STRUCTURE.md)**: Detailed overview of project organization
-- **[Experiment Guide](docs/EXPERIMENT_GUIDE.md)**: How to create and run experiments
-- **[Class Mapping Guide](docs/CLASS_MAPPING_GUIDE.md)**: How to generate and use class mappings
-- **[Dataset Guide](docs/DATASET_GUIDE.md)**: Setting up and uploading datasets
-- **[Memory Efficient Guide](docs/MEMORY_EFFICIENT_GUIDE.md)**: Optimizing memory usage
-
-See also:
-- **[Contributing Guidelines](CONTRIBUTING.md)**: How to contribute to the project
+- **[Dataset Creation](DATASET_CREATION.md)**: Comprehensive documentation on the merged raw food recognition dataset creation process, including methodology, source datasets, and publication details
+- **[Multi-Label Dataset Guide](MULTI_LABEL_DATASET_GUIDE.md)**: Comprehensive guide for creating multi-label food recognition datasets using synthetic image composition. Includes approach explanation, usage commands, and technical details.
+- **[Multi-Label Model Architecture](MULTI_LABEL_MODEL_ARCHITECTURE.md)**: Detailed explanation of the multi-label classification architecture, why it works, and the three training strategies (freeze encoder, full training, fine-tuning) with guidance on when to use each approach.
 
 ## 🔬 Technical Details
 

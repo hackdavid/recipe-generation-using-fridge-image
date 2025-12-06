@@ -11,7 +11,7 @@ data:
   train_ratio: 0.8  # Ratio for training split when use_custom_split=true (default: 0.8 = 80%)
   data_dir: ""  # Only used if data_source is "folder"
   image_size: 224
-  num_workers: 2
+  num_workers: 4
   class_mapping_path: "trainer/class_mapping.json"  # Path to class mapping JSON file (generate first using generate_class_mapping.py)
   debug_mode: false  # Set to true for quick end-to-end testing (runs 1 batch train + 1 batch val)
   debug_max_train_batches: 1  # Max training batches per epoch in debug mode
@@ -19,7 +19,7 @@ data:
 
 # Model Configuration
 model:
-  architecture: "se_resnet50"  # Options: resnet50, se_resnet50
+  architecture: "resnet50"  # Options: resnet50, se_resnet50
   num_classes: 90  # Will be auto-detected from dataset if not specified
   pretrained: true
   se_reduction: false  #16  # Only used for SE-ResNet-50
@@ -47,7 +47,7 @@ training:
 # Checkpoint Configuration
 checkpoint:
   save_dir: "./checkpoints"
-  resume: false # Path to checkpoint to resume from, or null
+  resume: "./checkpoints/resnet50_best.pth" # Path to checkpoint to resume from, or null
   save_best: true
   save_latest: true
 
@@ -56,9 +56,9 @@ wandb:
   use: true  # Set to true to enable wandb logging
   project: "ingredient-recognition"
   entity: null  # Your wandb team/username, or null
-  run_name: "se_resnet50_experiment"  # Custom run name, or null for auto-generated
+  run_name: "exp_50_epochs_90_classes_resume_20_epochs"  # Custom run name, or null for auto-generated
   tags: []  # List of tags, e.g., ["resnet50", "baseline"]
-  api_key: ""
+  api_key: "58e1b0bddf5cabe7952a334b740a259d62aae3a2"
 
 # Logging Configuration
 logging:

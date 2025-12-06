@@ -274,8 +274,13 @@ def main():
     if cfg['model'] == 'resnet50':
         model = create_resnet50(num_classes=num_classes, pretrained=cfg.get('pretrained', True))
     else:
+        # Handle se_reduction: if False/None/0, use default 16; otherwise use the provided value
+        se_reduction = cfg.get('se_reduction', 16)
+        if se_reduction is False or se_reduction is None or se_reduction == 0:
+            se_reduction = 16
+            logger.warning(f"se_reduction was set to {cfg.get('se_reduction')} (invalid). Using default value: 16")
         model = create_se_resnet50(num_classes=num_classes, pretrained=cfg.get('pretrained', True), 
-                                   reduction=cfg.get('se_reduction', 16))
+                                   reduction=se_reduction)
     
     model = model.to(device)
     

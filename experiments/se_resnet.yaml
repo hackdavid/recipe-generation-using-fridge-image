@@ -13,7 +13,7 @@ data:
   image_size: 224
   num_workers: 2
   class_mapping_path: "trainer/class_mapping.json"  # Path to class mapping JSON file (generate first using generate_class_mapping.py)
-  debug_mode: false  # Set to true for quick end-to-end testing (runs 1 batch train + 1 batch val)
+  debug_mode: true  # Set to true for quick end-to-end testing (runs 1 batch train + 1 batch val)
   debug_max_train_batches: 1  # Max training batches per epoch in debug mode
   debug_max_val_batches: 1  # Max validation batches per epoch in debug mode
 
@@ -22,7 +22,7 @@ model:
   architecture: "se_resnet50"  # Options: resnet50, se_resnet50
   num_classes: 90  # Will be auto-detected from dataset if not specified
   pretrained: true
-  se_reduction: false  #16  # Only used for SE-ResNet-50
+  se_reduction: 16  # Reduction ratio for SE blocks (default: 16). Must be > 0.
 
 # Training Configuration
 training:
@@ -58,7 +58,7 @@ wandb:
   entity: null  # Your wandb team/username, or null
   run_name: "se_resnet50_experiment"  # Custom run name, or null for auto-generated
   tags: []  # List of tags, e.g., ["resnet50", "baseline"]
-  api_key: ""
+  api_key: "58e1b0bddf5cabe7952a334b740a259d62aae3a2"
 
 # Logging Configuration
 logging:

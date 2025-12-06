@@ -19,12 +19,14 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual Environment
 venv/
 env/
 ENV/
 .venv
+.conda/
 
 # IDE
 .vscode/
@@ -32,40 +34,71 @@ ENV/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
 
 # Jupyter Notebook
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
-# Model checkpoints and results
-checkpoints/
-*.pth
-*.pt
-results/
-*.json
+# Model checkpoints and results (keep structure, ignore contents)
+checkpoints/*.pth
+checkpoints/*.pt
+checkpoints/*.json
+!checkpoints/.gitkeep
+trainer/checkpoints/*.pth
+trainer/checkpoints/*.pt
 
-# Data
+# Data directories (keep structure, ignore contents)
 data/
 merged_dataset/
 *.csv
 *.h5
 *.hdf5
+*.parquet
 
 # Logs
 logs/
 *.log
+
+# Experiment tracking
 wandb/
+mlruns/
+.neptune/
 
 # OS
 .DS_Store
 Thumbs.db
 desktop.ini
+*.lnk
 
-# Project specific
-experiments/
+# Project specific temporary files
 *.pdf
+*.tmp
+*.bak
+*.cache
 
 # Colab
 /content/
 /sample_data/
 
+# HuggingFace cache
+.cache/
+huggingface/
+
+# Class mapping (generated file - keep in repo for reproducibility)
+# trainer/class_mapping.json is tracked
+
+# Environment variables
+.env
+.env.local
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
